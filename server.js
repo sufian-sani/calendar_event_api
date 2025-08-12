@@ -1,7 +1,7 @@
 // server.js
-import express from 'express';
-import mongoose from 'mongoose';
-import bodyParser from 'body-parser';
+const express = require('express');
+const mongoose = require('mongoose');
+const bodyParser = require('body-parser');
 
 const app = express();
 app.use(bodyParser.json());
