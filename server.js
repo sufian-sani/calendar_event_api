@@ -10,8 +10,12 @@ app.use(bodyParser.json());
 const mockAuth = (req, res, next) => {
   // For demo, assign a static user and admin flag
   // In real life, extract from token/session
+
+  const userId = req.header("x-user-id") || "user123";
+  const isAdmin = req.header("x-user-admin") === "true";
+
   req.user = {
-    userId: 'user123',
+    userId: "user123",
     isAdmin: false,
   };
   next();
