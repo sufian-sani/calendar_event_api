@@ -60,6 +60,7 @@ const canEdit = (user, event) => {
 
 // --- POST /events --- Create event with optional recurrence
 app.post('/events', async (req, res) => {
+  
   try {
     const {
       title,
@@ -108,6 +109,7 @@ app.put('/events/:eventId', async (req, res) => {
       removeParticipants = [],
       recurrenceUpdateOption = 'thisEvent', // default option
     } = req.body;
+    
 
     if (!['thisEvent', 'thisAndFollowing', 'allEvents'].includes(recurrenceUpdateOption)) {
       return res.status(400).json({ message: 'Invalid recurrenceUpdateOption' });
