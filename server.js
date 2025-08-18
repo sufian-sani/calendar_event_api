@@ -69,6 +69,7 @@ app.post('/events', async (req, res) => {
       endTime,
       participants = [],
       recurrence = 'none',
+      recurrenceUpdateOption = 'thisEvent', // default option
     } = req.body;
 
     if (!title || !startTime || !endTime) {
@@ -79,6 +80,10 @@ app.post('/events', async (req, res) => {
       return res.status(400).json({ message: 'Invalid recurrence value' });
     }
 
+    if (!['thisEvent', 'thisAndFollowing', 'allEvents'].includes(recurrenceUpdateOption)) {
+      return res.status(400).json({ message: 'Invalid recurrenceUpdateOption' });
+    }
+
     const event = new Event({
       title,
       description,
@@ -86,6 +91,7 @@ app.post('/events', async (req, res) => {
       endTime,
       participants,
       recurrence,
+      recurrenceUpdateOption,
       creator: req.user.userId,
     });
 
