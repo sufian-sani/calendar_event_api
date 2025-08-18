@@ -43,7 +43,7 @@ const eventSchema = new mongoose.Schema({
     enum: ['none', 'daily', 'weekly', 'monthly'],
     default: 'none',
   },
-  parentEvent: { type: mongoose.Schema.Types.ObjectId, ref: 'Event', default: null }, // for overrides
+  // parentEvent: { type: mongoose.Schema.Types.ObjectId, ref: 'Event', default: null }, // for overrides
   recurrenceUpdateOption: {
     type: String,
     enum: ['thisEvent', 'thisAndFollowing', 'allEvents', null],
@@ -68,7 +68,7 @@ app.post('/events', async (req, res) => {
       startTime,
       endTime,
       participants = [],
-      recurrence = 'none',
+      recurrence = 'daily',
       recurrenceUpdateOption = 'thisEvent', // default option
     } = req.body;
 
@@ -76,7 +76,7 @@ app.post('/events', async (req, res) => {
       return res.status(400).json({ message: 'title, startTime and endTime required' });
     }
 
-    if (!['none', 'daily', 'weekly', 'monthly'].includes(recurrence)) {
+    if (!['daily', 'weekly', 'monthly'].includes(recurrence)) {
       return res.status(400).json({ message: 'Invalid recurrence value' });
     }
 
@@ -131,7 +131,7 @@ app.put('/events/:eventId', async (req, res) => {
     // Handle each recurrenceUpdateOption differently
     if (recurrenceUpdateOption === 'thisEvent') {
       // Update only this instance (create override if recurring)
-      if (event.recurrence === 'none' || event.parentEvent) {
+      if (event.recurrence === 'daily') {
         // single event or already override
         if (title !== undefined) event.title = title;
         if (description !== undefined) event.description = description;
@@ -146,151 +146,129 @@ app.put('/events/:eventId', async (req, res) => {
 
         await event.save();
         return res.json(event);
-      } else {
-        // Recurring series, create override event for this occurrence
-        const override = new Event({
-          title: title !== undefined ? title : event.title,
-          description: description !== undefined ? description : event.description,
-          startTime: startTime !== undefined ? new Date(startTime) : event.startTime,
-          endTime: endTime !== undefined ? new Date(endTime) : event.endTime,
-          participants: event.participants.slice(),
-          creator: event.creator,
-          recurrence: 'none', // overrides are single events
-          parentEvent: event._id,
-          recurrenceUpdateOption: 'thisEvent',
-        });
-
-        // Apply participant changes
-        const currentParts = new Set(override.participants);
-        addParticipants.forEach((p) => currentParts.add(p));
-        removeParticipants.forEach((p) => currentParts.delete(p));
-        override.participants = Array.from(currentParts);
-
-        await override.save();
-        return res.json(override);
       }
     }
 
-    if (recurrenceUpdateOption === 'thisAndFollowing') {
-      // Update this event and all future occurrences
-      if (event.recurrence === 'none' && !event.parentEvent) {
-        // Single event: just update it
-        if (title !== undefined) event.title = title;
-        if (description !== undefined) event.description = description;
-        if (startTime !== undefined) event.startTime = new Date(startTime);
-        if (endTime !== undefined) event.endTime = new Date(endTime);
+    // if (recurrenceUpdateOption === 'thisAndFollowing') {
+    //   // Update this event and all future occurrences
+    //   if (event.recurrence === 'none' && !event.parentEvent) {
+    //     // Single event: just update it
+    //     if (title !== undefined) event.title = title;
+    //     if (description !== undefined) event.description = description;
+    //     if (startTime !== undefined) event.startTime = new Date(startTime);
+    //     if (endTime !== undefined) event.endTime = new Date(endTime);
 
-        // Add/remove participants
-        const currentParts = new Set(event.participants);
-        addParticipants.forEach((p) => currentParts.add(p));
-        removeParticipants.forEach((p) => currentParts.delete(p));
-        event.participants = Array.from(currentParts);
+    //     // Add/remove participants
+    //     const currentParts = new Set(event.participants);
+    //     addParticipants.forEach((p) => currentParts.add(p));
+    //     removeParticipants.forEach((p) => currentParts.delete(p));
+    //     event.participants = Array.from(currentParts);
 
-        await event.save();
-        return res.json(event);
-      }
+    //     await event.save();
+    //     return res.json(event);
+    //   }
 
-      // For recurring events or overrides, we update the base event start from current event time
-      let baseEventId;
-      let baseEvent;
+    //   // For recurring events or overrides, we update the base event start from current event time
+    //   let baseEventId;
+    //   let baseEvent;
 
-      if (event.parentEvent) {
-        baseEventId = event.parentEvent;
-      } else {
-        baseEventId = event._id;
-      }
+    //   if (event.parentEvent) {
+    //     baseEventId = event.parentEvent;
+    //   } else {
+    //     baseEventId = event._id;
+    //   }
 
-      baseEvent = await Event.findById(baseEventId);
-      if (!baseEvent) return res.status(404).json({ message: 'Base event not found' });
+    //   baseEvent = await Event.findById(baseEventId);
+    //   if (!baseEvent) return res.status(404).json({ message: 'Base event not found' });
 
-      if (!canEdit(req.user, baseEvent)) {
-        return res.status(403).json({ message: 'No permission to update this event series' });
-      }
+    //   if (!canEdit(req.user, baseEvent)) {
+    //     return res.status(403).json({ message: 'No permission to update this event series' });
+    //   }
 
-      // Change base event startTime and endTime if provided to the current event's occurrence start time
-      // and then create a new event to represent the modified series from this date forward
+    //   // Change base event startTime and endTime if provided to the current event's occurrence start time
+    //   // and then create a new event to represent the modified series from this date forward
 
-      // Calculate new start time if provided, else keep
-      const newStartTime = startTime !== undefined ? new Date(startTime) : event.startTime;
-      const newEndTime = endTime !== undefined ? new Date(endTime) : event.endTime;
+    //   // Calculate new start time if provided, else keep
+    //   const newStartTime = startTime !== undefined ? new Date(startTime) : event.startTime;
+    //   const newEndTime = endTime !== undefined ? new Date(endTime) : event.endTime;
 
-      // Cut off the existing base event recurrence until the occurrence before this event start
-      // by adjusting recurrence or ending time - **for simplicity, let's remove all events in the series
-      // starting from this occurrence and recreate a new event with updated info**
+    //   // Cut off the existing base event recurrence until the occurrence before this event start
+    //   // by adjusting recurrence or ending time - **for simplicity, let's remove all events in the series
+    //   // starting from this occurrence and recreate a new event with updated info**
 
-      // Remove overrides related to base event from this event's startTime forward
-      await Event.deleteMany({
-        $or: [
-          { _id: event._id },
-          { parentEvent: baseEvent._id },
-        ],
-        startTime: { $gte: event.startTime },
-        recurrenceUpdateOption: { $in: ['thisEvent', 'thisAndFollowing'] },
-      });
+    //   // Remove overrides related to base event from this event's startTime forward
+    //   await Event.deleteMany({
+    //     $or: [
+    //       { _id: event._id },
+    //       { parentEvent: baseEvent._id },
+    //     ],
+    //     startTime: { $gte: event.startTime },
+    //     recurrenceUpdateOption: { $in: ['thisEvent', 'thisAndFollowing'] },
+    //   });
 
-      // Update baseEvent's endTime to just before this event start to break series
-      // or in this simplified model, let's just set recurrence to 'none' for base event before the new event
-      baseEvent.recurrence = 'none';
-      await baseEvent.save();
+    //   // Update baseEvent's endTime to just before this event start to break series
+    //   // or in this simplified model, let's just set recurrence to 'none' for base event before the new event
+    //   baseEvent.recurrence = 'none';
+    //   await baseEvent.save();
 
-      // Create new event series starting at newStartTime
-      const newEventSeries = new Event({
-        title: title !== undefined ? title : baseEvent.title,
-        description: description !== undefined ? description : baseEvent.description,
-        startTime: newStartTime,
-        endTime: newEndTime,
-        participants: baseEvent.participants.slice(),
-        recurrence: baseEvent.recurrence,
-        creator: baseEvent.creator,
-      });
+    //   // Create new event series starting at newStartTime
+    //   const newEventSeries = new Event({
+    //     title: title !== undefined ? title : baseEvent.title,
+    //     description: description !== undefined ? description : baseEvent.description,
+    //     startTime: newStartTime,
+    //     endTime: newEndTime,
+    //     participants: baseEvent.participants.slice(),
+    //     recurrence: baseEvent.recurrence,
+    //     creator: baseEvent.creator,
+    //   });
 
-      // Participants add/remove
-      const currentParts = new Set(newEventSeries.participants);
-      addParticipants.forEach((p) => currentParts.add(p));
-      removeParticipants.forEach((p) => currentParts.delete(p));
-      newEventSeries.participants = Array.from(currentParts);
+    //   // Participants add/remove
+    //   const currentParts = new Set(newEventSeries.participants);
+    //   addParticipants.forEach((p) => currentParts.add(p));
+    //   removeParticipants.forEach((p) => currentParts.delete(p));
+    //   newEventSeries.participants = Array.from(currentParts);
 
-      await newEventSeries.save();
+    //   await newEventSeries.save();
 
-      return res.json(newEventSeries);
-    }
+    //   return res.json(newEventSeries);
+    // }
 
-    if (recurrenceUpdateOption === 'allEvents') {
-      // Update all occurrences of this series (including overrides)
+    // if (recurrenceUpdateOption === 'allEvents') {
+    //   // Update all occurrences of this series (including overrides)
 
-      let baseEventId;
-      if (event.parentEvent) {
-        baseEventId = event.parentEvent;
-      } else {
-        baseEventId = event._id;
-      }
+    //   let baseEventId;
+    //   if (event.parentEvent) {
+    //     baseEventId = event.parentEvent;
+    //   } else {
+    //     baseEventId = event._id;
+    //   }
 
-      const baseEvent = await Event.findById(baseEventId);
-      if (!baseEvent) return res.status(404).json({ message: 'Base event not found' });
+    //   const baseEvent = await Event.findById(baseEventId);
+    //   if (!baseEvent) return res.status(404).json({ message: 'Base event not found' });
 
-      if (!canEdit(req.user, baseEvent)) {
-        return res.status(403).json({ message: 'No permission to update this event series' });
-      }
+    //   if (!canEdit(req.user, baseEvent)) {
+    //     return res.status(403).json({ message: 'No permission to update this event series' });
+    //   }
 
-      // Update base event
-      if (title !== undefined) baseEvent.title = title;
-      if (description !== undefined) baseEvent.description = description;
-      if (startTime !== undefined) baseEvent.startTime = new Date(startTime);
-      if (endTime !== undefined) baseEvent.endTime = new Date(endTime);
+    //   // Update base event
+    //   if (title !== undefined) baseEvent.title = title;
+    //   if (description !== undefined) baseEvent.description = description;
+    //   if (startTime !== undefined) baseEvent.startTime = new Date(startTime);
+    //   if (endTime !== undefined) baseEvent.endTime = new Date(endTime);
 
-      // Participants add/remove
-      const currentParts = new Set(baseEvent.participants);
-      addParticipants.forEach((p) => currentParts.add(p));
-      removeParticipants.forEach((p) => currentParts.delete(p));
-      baseEvent.participants = Array.from(currentParts);
+    //   // Participants add/remove
+    //   const currentParts = new Set(baseEvent.participants);
+    //   addParticipants.forEach((p) => currentParts.add(p));
+    //   removeParticipants.forEach((p) => currentParts.delete(p));
+    //   baseEvent.participants = Array.from(currentParts);
 
-      await baseEvent.save();
+    //   await baseEvent.save();
 
-      // Delete all overrides for this series since the base event is updated
-      await Event.deleteMany({ parentEvent: baseEvent._id });
+    //   // Delete all overrides for this series since the base event is updated
+    //   await Event.deleteMany({ parentEvent: baseEvent._id });
 
-      return res.json(baseEvent);
-    }
+    //   return res.json(baseEvent);
+    // }
 
   } catch (error) {
     res.status(500).json({ error: error.message });
