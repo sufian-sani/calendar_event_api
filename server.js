@@ -117,6 +117,9 @@ app.put('/events/:eventId', async (req, res) => {
     } = req.body;
     
 
+    if (!['daily', 'weekly', 'monthly'].includes(recurrence)) {
+      return res.status(400).json({ message: 'Invalid recurrence value' });
+    }
     if (!['thisEvent', 'thisAndFollowing', 'allEvents'].includes(recurrenceUpdateOption)) {
       return res.status(400).json({ message: 'Invalid recurrenceUpdateOption' });
     }
@@ -133,6 +136,7 @@ app.put('/events/:eventId', async (req, res) => {
       // Update only this instance (create override if recurring)
       if (event.recurrence === 'daily') {
         // single event or already override
+        if (title !== undefined) event.title = title;
         if (title !== undefined) event.title = title;
         if (description !== undefined) event.description = description;
         if (startTime !== undefined) event.startTime = new Date(startTime);
